@@ -14,6 +14,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureAdmin::class,
             'customer' => \App\Http\Middleware\EnsureCustomer::class,
+            'role' => \App\Http\Middleware\RoleMiddleware::class,
+            'restaurant.unlocked' => \App\Http\Middleware\EnsureRestaurantUnlocked::class,
         ]);
 
         $middleware->validateCsrfTokens(except: [

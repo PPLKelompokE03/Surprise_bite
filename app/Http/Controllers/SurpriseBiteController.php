@@ -545,6 +545,13 @@ class SurpriseBiteController extends Controller
         return 'ORD-' . str_replace('.', '', uniqid('', true));
     }
 
+    public function adminTransactions(): View
+    {
+        // Placeholder method for the admin.transactions route
+        // Replace with actual transactions logic
+        return view('surprisebite.admin.impact', $this->getImpactMetrics());
+    }
+
     public function adminImpact(): View
     {
         return view('surprisebite.admin.impact', $this->getImpactMetrics());

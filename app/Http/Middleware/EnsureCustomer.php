@@ -4,19 +4,18 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureCustomer
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $auth = $request->session()->get('auth');
-
-        if (is_array($auth) && ($auth['role'] ?? null) === 'user') {
+        if (Auth::check() && Auth::user()->role === 'customer') {
             return $next($request);
         }
 
-        if (is_array($auth) && ($auth['role'] ?? null) === 'admin') {
+        if (Auth::check() && Auth::user()->role === 'admin') {
             return redirect()
                 ->route('home')
                 ->withErrors(['email' => 'Checkout hanya untuk akun pelanggan (user).']);
