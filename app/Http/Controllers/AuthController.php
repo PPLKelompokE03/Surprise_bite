@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 
@@ -19,57 +19,39 @@ class AuthController extends Controller
 
     public function login(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
+        $credentials = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
         ]);
 
-        $email = $validated['email'];
-        $customer = DB::table('customers')->where('email', $email)->first();
-        $adminAccount = DB::table('admins')->where('email', $email)->first();
+        $user = User::where('email', $credentials['email'])->first();
 
-        if (!$customer) {
-            if ($adminAccount) {
-                return back()
-                    ->withErrors([
-                        'email' => 'Email ini untuk akun admin. Buka halaman Login Admin (bukan login pelanggan).',
-                    ])
-                    ->withInput();
-            }
-
-            return back()
-                ->withErrors(['email' => 'Email atau password tidak valid. Belum punya akun? Daftar dulu.'])
-                ->withInput();
-        }
-
-        if (!Hash::check($validated['password'], $customer->password)) {
-            return back()
-                ->withErrors(['email' => 'Email atau password tidak valid. Belum punya akun? Daftar dulu.'])
-                ->withInput();
-        }
-
-        if ($adminAccount) {
+        if ($user && $user->role === 'admin') {
             return back()
                 ->withErrors([
-                    'email' => 'Email ini terdaftar sebagai admin. Jangan pakai login pelanggan — buka halaman Login Admin untuk masuk ke panel admin.',
+                    'email' => 'Email ini terdaftar sebagai admin. Buka halaman Login Admin untuk masuk.',
                 ])
                 ->withInput();
         }
 
-        $account = $customer;
+        if ($user && $user->role === 'seller') {
+            return back()
+                ->withErrors([
+                    'email' => 'Email ini terdaftar sebagai mitra/seller. Buka halaman Login Seller untuk masuk.',
+                ])
+                ->withInput();
+        }
 
-        $request->session()->put('auth', [
-            'id' => $account->id,
-            'name' => $account->name,
-            'email' => $account->email,
-            'role' => 'user',
-        ]);
+        if (Auth::attempt($credentials)) {
+            $request->session()->regenerate();
 
-        $request->session()->regenerate();
+            return redirect()->intended(route('home'))
+                ->with('status', 'Berhasil masuk. Selamat datang, ' . Auth::user()->name . '!');
+        }
 
-        return redirect()
-            ->intended(route('home'))
-            ->with('status', 'Berhasil masuk. Selamat datang, ' . $account->name . '!');
+        return back()
+            ->withErrors(['email' => 'Email atau password tidak valid. Belum punya akun? Daftar dulu.'])
+            ->withInput();
     }
 
     public function showRegister(): View
@@ -85,7 +67,7 @@ class AuthController extends Controller
                 'required',
                 'email',
                 'max:255',
-                'unique:customers,email',
+                'unique:users,email',
             ],
             'password' => ['required', 'confirmed', Password::min(8)],
             'terms' => ['accepted'],
@@ -94,19 +76,11 @@ class AuthController extends Controller
             'terms.accepted' => 'Kamu perlu menyetujui syarat & ketentuan.',
         ]);
 
-        // Check if email is already used in admins table
-        if (DB::table('admins')->where('email', $validated['email'])->exists()) {
-            return back()
-                ->withErrors(['email' => 'Email ini dipakai untuk akun admin. Gunakan email lain atau masuk lewat Login Admin.'])
-                ->withInput();
-        }
-
-        DB::table('customers')->insert([
+        $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => Hash::make($validated['password']),
-            'created_at' => now(),
-            'updated_at' => now(),
+            'role' => 'customer', // default role
         ]);
 
         return redirect()
@@ -121,36 +95,67 @@ class AuthController extends Controller
 
     public function adminLogin(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
+        $credentials = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
         ]);
 
-        $account = DB::table('admins')->where('email', $validated['email'])->first();
+        $user = User::where('email', $credentials['email'])->first();
 
-        if (!$account || !Hash::check($validated['password'], $account->password)) {
+        if (!$user || $user->role !== 'admin') {
             return back()
-                ->withErrors(['email' => 'Email atau password admin tidak valid.'])
+                ->withErrors(['email' => 'Email admin tidak ditemukan atau bukan akun admin.'])
                 ->withInput();
         }
 
-        $request->session()->put('auth', [
-            'id' => $account->id,
-            'name' => $account->name,
-            'email' => $account->email,
-            'role' => 'admin',
+        if (Auth::attempt($credentials)) {
+            $request->session()->regenerate();
+            return redirect()
+                ->route('admin.dashboard')
+                ->with('status', 'Selamat datang di panel admin, ' . Auth::user()->name . '.');
+        }
+
+        return back()
+            ->withErrors(['email' => 'Password admin tidak valid.'])
+            ->withInput();
+    }
+
+    public function showSellerLogin(): View
+    {
+        return view('auth.seller-login'); // you can rename this view if needed
+    }
+
+    public function sellerLogin(Request $request): RedirectResponse
+    {
+        $credentials = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string'],
         ]);
 
-        $request->session()->regenerate();
+        $user = User::where('email', $credentials['email'])->first();
 
-        return redirect()
-            ->route('admin.dashboard')
-            ->with('status', 'Selamat datang di panel admin, ' . $account->name . '.');
+        if (!$user || $user->role !== 'mitra') {
+            return back()
+                ->withErrors(['email' => 'Email mitra tidak ditemukan atau bukan akun mitra.'])
+                ->withInput();
+        }
+
+        if (Auth::attempt($credentials)) {
+            $request->session()->regenerate();
+            return redirect()
+                ->route('mitra.dashboard')
+                ->with('status', 'Selamat datang di Portal Mitra, ' . Auth::user()->name . '.');
+        }
+
+        return back()
+            ->withErrors(['password' => 'Password mitra tidak valid.'])
+            ->withInput();
     }
 
     public function logout(Request $request): RedirectResponse
     {
-        $request->session()->forget('auth');
+        Auth::logout();
+
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
