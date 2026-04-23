@@ -9,3 +9,4 @@ Artisan::command('inspire', function () {
 
 
 // programer flora
+// mockup system
