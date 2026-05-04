@@ -24,10 +24,3 @@ class MitraOrder extends Model
         return $this->belongsTo(Restaurant::class);
     }
 }
-
-<<<<<<< HEAD
-// flora update
-=======
-// flora testing
->>>>>>> 233a3d28b11b4c330158cc3ff6a6b3dbe0ac29d9
-
